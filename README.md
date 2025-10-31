@@ -1,4 +1,4 @@
-# Hệ thống giám sát và điều khiển IoT
+# HỆ THỐNG GIÁM SÁT MÔI TRƯỜNG TRONG PHÒNG HỌC
 
 Dự án này là một giải pháp IoT toàn diện để giám sát và điều khiển dữ liệu môi trường bằng MQTT, dashboard web và ứng dụng di động.
 
