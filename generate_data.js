@@ -5,10 +5,16 @@ const { Pool } = require('pg');
 console.log('DEBUG: PGHOST=', process.env.PGHOST);
 console.log('DEBUG: PGPORT=', process.env.PGPORT);
 
+// If running locally against a Docker container, PGHOST is likely 'postgres'.
+// We need to override it to 'localhost' and use the mapped port.
+const isRunningLocally = process.env.PGHOST === 'postgres';
+const dbHost = isRunningLocally ? 'localhost' : process.env.PGHOST;
+const dbPort = isRunningLocally ? 5433 : process.env.PGPORT;
+
 // --- Database Client Setup ---
 const pgPool = new Pool({
-  host: process.env.PGHOST,
-  port: process.env.PGPORT,
+  host: dbHost,
+  port: dbPort,
   database: process.env.PGDATABASE,
   user: process.env.PGUSER,
   password: process.env.PGPASSWORD,
@@ -25,6 +31,7 @@ async function generateData() {
   const daysToGenerate = 30; // Generate data for the last 30 full days
   const intervalMinutes = 0.5; // Two data points every minute
   const totalPoints = (daysToGenerate * 24 * 60) / intervalMinutes;
+  const batchSize = 1000; // Insert 1000 records at a time
 
   // Set time to 30 days ago from now
   let currentTime = new Date();
@@ -36,16 +43,20 @@ async function generateData() {
   console.log(`Target: ${totalPoints} data points across ${daysToGenerate} days, starting from ${currentTime.toUTCString()}`);
 
   try {
+    await client.query('BEGIN'); // Start transaction
+
     // Clear old data to prevent runaway database growth during testing
     console.log('🗑️  Clearing all existing sensor and event data...');
     await client.query('TRUNCATE TABLE sensor_data, events RESTART IDENTITY;');
     console.log('✅ Tables cleared.');
 
+    let values = [];
     for (let i = 0; i < totalPoints; i++) {
       // Stop if we've reached the current time
       if (currentTime > now) {
         break;
       }
+      const timestamp = new Date(currentTime.getTime()); // Clone date object
 
       // Simulate daily cycles for more realistic data
       const hourOfDay = currentTime.getUTCHours();
@@ -64,20 +75,29 @@ async function generateData() {
       // Lux: High during the day (1270-2000), lower at night (200-1000)
       const lux = (dayCycleSin > 0.1) ? (1200 + (dayCycleSin * 700) + Math.random() * 100) : (200 + Math.random() * 800);
 
-      const query = 'INSERT INTO sensor_data(timestamp, temperature, humidity, gas, pressure, lux) VALUES($1, $2, $3, $4, $5, $6)';
-      await client.query(query, [currentTime, temperature.toFixed(2), humidity.toFixed(2), Math.round(gas), pressure.toFixed(2), Math.round(lux)]);
+      values.push(timestamp, temperature.toFixed(2), humidity.toFixed(2), Math.round(gas), pressure.toFixed(2), Math.round(lux));
 
       // Increment time for the next historical data point
       currentTime.setTime(currentTime.getTime() + (intervalMinutes * 60 * 1000));
 
-      // Log progress
-      if ((i + 1) % 1000 === 0) { // Log every 1000 points
-        process.stdout.write(`\r💾 Inserted ${i + 1} of ${totalPoints} data points... Current Time: ${currentTime.toISOString()}`);
+      // Insert in batches
+      if (values.length / 6 >= batchSize || (i + 1) === totalPoints) {
+        const placeholders = values.map((_, index) => `$${index + 1}`).reduce((acc, val, index) => {
+            return index % 6 === 0 ? [...acc, `(${val}, $${index + 2}, $${index + 3}, $${index + 4}, $${index + 5}, $${index + 6})`] : acc;
+        }, []).join(', ');
+
+        const query = `INSERT INTO sensor_data(timestamp, temperature, humidity, gas, pressure, lux) VALUES ${placeholders}`;
+        await client.query(query, values);
+        
+        process.stdout.write(`\r💾 Inserted ${i + 1} of ${totalPoints} data points...`);
+        values = []; // Reset for next batch
       }
     }
+    await client.query('COMMIT'); // Commit transaction
     console.log(`\n✅ Successfully inserted ${totalPoints} fake data points into the 'sensor_data' table.`);
 
   } catch (error) {
+    await client.query('ROLLBACK'); // Rollback on error
     console.error('\n❌ An error occurred during data generation:', error);
   } finally {
     client.release();

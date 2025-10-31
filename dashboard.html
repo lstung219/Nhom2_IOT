@@ -274,7 +274,7 @@
             addData(charts.gas, data.gas);
             addData(charts.lux, data.lux);
 
-            Object.values(charts).forEach(chart => chart.update());
+            Object.values(charts).forEach(chart => chart.update('none'));
 
             if (data.temp_c !== undefined) elements.current_temp.textContent = `${data.temp_c.toFixed(1)} °C`;
             if (data.hum_pct !== undefined) elements.current_hum.textContent = `${data.hum_pct.toFixed(1)} %`;
