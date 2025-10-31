@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for data persistence
+  postgres:
+    image: postgres:15-alpine
+    container_name: iot-demo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PGDATABASE}
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql # Initializes the DB schema
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Node.js service to listen to MQTT and save data to the database
+  iot-data-service:
+    image: node:18-alpine
+    container_name: iot-demo-data-service
+    restart: unless-stopped
+    working_dir: /usr/src/app
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    volumes:
+      - ./:/usr/src/app
+      - node_modules_data:/usr/src/app/node_modules
+    command: sh -c "npm install && node iot_data_service.js"
+    env_file:
+      - ./.env
+    depends_on:
+      postgres:
+        condition: service_healthy # Waits for postgres to be ready
+
+volumes:
+  postgres_data:
+  node_modules_data:

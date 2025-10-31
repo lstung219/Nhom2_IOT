@@ -1,0 +1,280 @@
+[
+  {
+    "id": "flow1",
+    "label": "IoT Alerts Flow",
+    "nodes": [
+      {
+        "id": "mqtt-online",
+        "type": "mqtt in",
+        "z": "flow1",
+        "name": "Device Online Status",
+        "topic": "lab/room1/sys/online",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "mqtt-broker",
+        "nl": false,
+        "rap": false,
+        "rh": "0",
+        "x": 150,
+        "y": 100,
+        "wires": [
+          ["offline-check"]
+        ]
+      },
+      {
+        "id": "offline-check",
+        "type": "function",
+        "z": "flow1",
+        "name": "Check Offline",
+        "func": "// Parse the online status message\nvar online = msg.payload.online;\n\n// Only send alert if device goes offline\nif (online === false) {\n    msg.payload = {\n        text: \"🛑 Device room1 is now OFFLINE\",\n        chat_id: \"TELEGRAM_CHAT_ID\"\n    };\n    return msg;\n}\n\n// Don't send message for online status\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 100,
+        "wires": [
+          ["telegram-offline"]
+        ]
+      },
+      {
+        "id": "telegram-offline",
+        "type": "http request",
+        "z": "flow1",
+        "name": "Send Offline Alert",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "https://api.telegram.org/botTELEGRAM_BOT_TOKEN/sendMessage",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "authType": "",
+        "senderr": false,
+        "headers": [
+          {
+            "keyType": "other",
+            "keyValue": "Content-Type",
+            "valueType": "other",
+            "valueValue": "application/json"
+          }
+        ],
+        "x": 650,
+        "y": 100,
+        "wires": [
+          ["debug-offline"]
+        ]
+      },
+      {
+        "id": "debug-offline",
+        "type": "debug",
+        "z": "flow1",
+        "name": "Offline Alert Log",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 890,
+        "y": 100,
+        "wires": []
+      },
+      {
+        "id": "mqtt-alerts",
+        "type": "mqtt in",
+        "z": "flow1",
+        "name": "Alert Events",
+        "topic": "lab/room1/alert/event",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "mqtt-broker",
+        "nl": false,
+        "rap": false,
+        "rh": "0",
+        "x": 150,
+        "y": 300,
+        "wires": [
+          ["format-alert"]
+        ]
+      },
+      {
+        "id": "format-alert",
+        "type": "function",
+        "z": "flow1",
+        "name": "Format Alert Message",
+        "func": "// Parse alert event\nvar alert = msg.payload;\n\n// Format alert message\nvar alertText = \"⚠️ ALERT: \" + alert.type.toUpperCase().replace(\"_\", \" \");\nif (alert.value !== undefined) {\n    alertText += \" (Value: \" + alert.value + \")\";\n}\nif (alert.note) {\n    alertText += \"\\n📝 \" + alert.note;\n}\n\n// Add timestamp\nif (alert.ts) {\n    var date = new Date(alert.ts * 1000);\n    alertText += \"\\n🕐 \" + date.toLocaleString();\n}\n\nmsg.payload = {\n    text: alertText,\n    chat_id: \"TELEGRAM_CHAT_ID\"\n};\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 300,
+        "wires": [
+          ["telegram-alert"]
+        ]
+      },
+      {
+        "id": "telegram-alert",
+        "type": "http request",
+        "z": "flow1",
+        "name": "Send Alert to Telegram",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "https://api.telegram.org/botTELEGRAM_BOT_TOKEN/sendMessage",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "authType": "",
+        "senderr": false,
+        "headers": [
+          {
+            "keyType": "other",
+            "keyValue": "Content-Type",
+            "valueType": "other",
+            "valueValue": "application/json"
+          }
+        ],
+        "x": 680,
+        "y": 300,
+        "wires": [
+          ["debug-alert"]
+        ]
+      },
+      {
+        "id": "debug-alert",
+        "type": "debug",
+        "z": "flow1",
+        "name": "Alert Log",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 890,
+        "y": 300,
+        "wires": []
+      },
+      {
+        "id": "mqtt-sensor",
+        "type": "mqtt in",
+        "z": "flow1",
+        "name": "Sensor Data (Monitor)",
+        "topic": "lab/room1/sensor/state",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "mqtt-broker",
+        "nl": false,
+        "rap": false,
+        "rh": "0",
+        "x": 170,
+        "y": 500,
+        "wires": [
+          ["debug-sensor"]
+        ]
+      },
+      {
+        "id": "debug-sensor",
+        "type": "debug",
+        "z": "flow1",
+        "name": "Sensor Log",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 420,
+        "y": 500,
+        "wires": []
+      },
+      {
+        "id": "mqtt-device",
+        "type": "mqtt in",
+        "z": "flow1",
+        "name": "Device State (Monitor)",
+        "topic": "lab/room1/device/state",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "mqtt-broker",
+        "nl": false,
+        "rap": false,
+        "rh": "0",
+        "x": 170,
+        "y": 560,
+        "wires": [
+          ["debug-device"]
+        ]
+      },
+      {
+        "id": "debug-device",
+        "type": "debug",
+        "z": "flow1",
+        "name": "Device State Log",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 440,
+        "y": 560,
+        "wires": []
+      },
+      {
+        "id": "comment1",
+        "type": "comment",
+        "z": "flow1",
+        "name": "MQTT Topics Monitor & Telegram Alerts",
+        "info": "This flow monitors IoT device status and sends alerts to Telegram:\n\n1. **Offline Detection**: Monitors lab/room1/sys/online (LWT)\n   - Sends Telegram alert when device goes offline\n\n2. **Alert Events**: Monitors lab/room1/alert/event\n   - Formats and forwards temperature/gas alerts to Telegram\n\n3. **Debug Monitoring**: Optional logging of all topics\n\n**Setup Instructions:**\n1. Replace TELEGRAM_BOT_TOKEN with your bot token\n2. Replace TELEGRAM_CHAT_ID with your chat ID\n3. Configure MQTT broker settings\n4. Deploy the flow\n\n**Testing:**\n- Disconnect device to trigger offline alert\n- Simulate high temperature/gas to trigger alert events",
+        "x": 230,
+        "y": 40,
+        "wires": []
+      }
+    ],
+    "configs": [
+      {
+        "id": "mqtt-broker",
+        "type": "mqtt-broker",
+        "name": "IoT MQTT Broker",
+        "broker": "192.168.1.10",
+        "port": "1883",
+        "clientid": "nodered_alerts",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "sessionExpiry": "",
+        "credentials": {
+          "user": "user1",
+          "password": "pass1"
+        }
+      }
+    ]
+  }
+]

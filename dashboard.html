@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Dashboard v8 - Final</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg-color: rgba(255, 255, 255, 0.8);
+            --border-color: rgba(0, 0, 0, 0.1);
+            --text-color: #212529;
+            --text-muted-color: #6c757d;
+        }
+        body {
+            background-image: linear-gradient(120deg, #fdfbfb 0%, #ebedee 100%);
+            color: var(--text-color);
+        }
+        .card {
+            background: var(--card-bg-color);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+        }
+        .card-header { background: transparent; border-bottom: 1px solid var(--border-color); }
+        .chart-container { position: relative; height: 280px; }
+        #alert-container { position: fixed; top: 20px; right: 20px; z-index: 1050; min-width: 350px; }
+        .nav-link.active { background-color: rgba(0,0,0,0.05) !important; }
+    </style>
+</head>
+<body>  
+
+    <div id="alert-container"></div>
+
+
+    <div class="container-fluid p-4">
+        <header class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0"><i class="bi bi-house-heart-fill"></i> IoT Dashboard</h1>
+            <div class="d-flex gap-2">
+                <div id="brokerStatus" class="badge rounded-pill text-bg-secondary"><i class="bi bi-reception-4"></i> MQTT: Connecting...</div>
+                <div id="deviceStatus" class="badge rounded-pill text-bg-secondary"><i class="bi bi-cpu"></i> Device: Offline</div>
+            </div>
+        </header>
+
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header"><h5 class="card-title mb-0"><i class="bi bi-thermometer-half"></i> Current Readings</h5></div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-center"><span>🌡️ Temperature</span><strong id="current_temp">-- °C</strong></li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center"><span>💧 Humidity</span><strong id="current_hum">-- %</strong></li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center"><span>💨 Gas</span><strong id="current_gas">--</strong></li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center"><span>☀️ Light</span><strong id="current_lux">-- lux</strong></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card mb-4">
+                    <div class="card-header"><h5 class="card-title mb-0"><i class="bi bi-toggles"></i> Device Control</h5></div>
+                    <div class="card-body"><div class="list-group list-group-flush"><div class="list-group-item d-flex justify-content-between align-items-center"><label for="lightControl" class="form-check-label h6 mb-0">💡 Light</label><div class="form-check form-switch"><input class="form-check-input fs-5" type="checkbox" role="switch" id="lightControl"></div></div><div class="list-group-item d-flex justify-content-between align-items-center"><label for="fanControl" class="form-check-label h6 mb-0">🌀 Fan</label><div class="form-check form-switch"><input class="form-check-input fs-5" type="checkbox" role="switch" id="fanControl"></div></div><div class="list-group-item d-flex justify-content-between align-items-center"><label for="autoLightControl" class="form-check-label h6 mb-0">🤖 Auto Light</label><div class="form-check form-switch"><input class="form-check-input fs-5" type="checkbox" role="switch" id="autoLightControl"></div></div></div></div>
+                </div>
+
+                <div class="card"><div class="card-header"><h5 class="card-title mb-0"><i class="bi bi-hdd-stack-fill"></i> System Info</h5></div><div class="card-body"><ul class="list-group list-group-flush"><li class="list-group-item d-flex justify-content-between align-items-center"><span>📶 WiFi Signal</span><strong id="rssi">-- dBm</strong></li><li class="list-group-item d-flex justify-content-between align-items-center"><span>⚙️ Firmware</span><strong id="firmware">--</strong></li><li class="list-group-item d-flex justify-content-between align-items-center"><span>📦 Msgs Rcvd</span><strong id="messageCount">0</strong></li></ul></div></div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="row g-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                                <h5 class="card-title mb-0 me-3"><i class="bi bi-graph-up"></i> Sensor History</h5>
+                                <div class="d-flex align-items-center flex-wrap">
+                                    <div id="range-selector" class="btn-group btn-group-sm me-2" role="group">
+                                        <input type="radio" class="btn-check" name="range" id="range1h" autocomplete="off"><label class="btn btn-outline-secondary" for="range1h">1 Hour</label>
+                                        <input type="radio" class="btn-check" name="range" id="range24h" autocomplete="off" checked><label class="btn btn-outline-secondary" for="range24h">24 Hours</label>
+                                        <input type="radio" class="btn-check" name="range" id="range7d" autocomplete="off"><label class="btn btn-outline-secondary" for="range7d">7 Days</label>
+                                        <input type="radio" class="btn-check" name="range" id="range30d" autocomplete="off"><label class="btn btn-outline-secondary" for="range30d">30 Days</label>
+                                    </div>
+                                    <input type="date" id="day-selector" class="form-control form-control-sm" style="width: auto; display: none;">
+                                    <input type="month" id="month-selector" class="form-control form-control-sm" style="width: auto; display: none;">
+                                    <input type="datetime-local" id="datetime-picker" class="form-control form-control-sm" style="width: auto; display: block;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <ul class="nav nav-tabs card-header-tabs" id="chart-tabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="temp-tab" data-bs-toggle="tab" data-bs-target="#temperature-chart-pane" type="button" role="tab" aria-controls="temperature-chart-pane" aria-selected="true">🌡️ Temperature</button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="hum-tab" data-bs-toggle="tab" data-bs-target="#humidity-chart-pane" type="button" role="tab" aria-controls="humidity-chart-pane" aria-selected="false">💧 Humidity</button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="gas-tab" data-bs-toggle="tab" data-bs-target="#gas-chart-pane" type="button" role="tab" aria-controls="gas-chart-pane" aria-selected="false">💨 Gas</button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="lux-tab" data-bs-toggle="tab" data-bs-target="#lux-chart-pane" type="button" role="tab" aria-controls="lux-chart-pane" aria-selected="false">☀️ Light</button>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="card-body">
+                                <div class="tab-content" id="chart-tab-content">
+                                    <div class="tab-pane fade show active" id="temperature-chart-pane" role="tabpanel" aria-labelledby="temp-tab">
+                                        <div class="chart-container"><canvas id="temperatureChart"></canvas></div>
+                                    </div>
+                                    <div class="tab-pane fade" id="humidity-chart-pane" role="tabpanel" aria-labelledby="hum-tab">
+                                        <div class="chart-container"><canvas id="humidityChart"></canvas></div>
+                                    </div>
+                                    <div class="tab-pane fade" id="gas-chart-pane" role="tabpanel" aria-labelledby="gas-tab">
+                                        <div class="chart-container"><canvas id="gasChart"></canvas></div>
+                                    </div>
+                                    <div class="tab-pane fade" id="lux-chart-pane" role="tabpanel" aria-labelledby="lux-tab">
+                                        <div class="chart-container"><canvas id="luxChart"></canvas></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ===================== CONFIGURATION =====================
+        const BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt';
+        const TOPIC_PREFIX = 'lstiot/lab/room1';
+        const [SENSOR_TOPIC, DEVICE_TOPIC, DEVICE_CMD_TOPIC, ONLINE_TOPIC] = ['sensor/state', 'device/state', 'device/cmd', 'sys/online'].map(t => `${TOPIC_PREFIX}/${t}`);
+        const API_URL = 'http://localhost:3001/api/history';
+        const TEMP_HIGH_C = 35.0, GAS_HIGH = 1800, LUX_LOW = 500, STREAK_NEEDED = 3, ALERT_COOLDOWN_MS = 30000;
+
+        // ===================== STATE & DOM =====================
+                const elements = {
+                    brokerStatus: document.getElementById('brokerStatus'), 
+                    deviceStatus: document.getElementById('deviceStatus'), 
+                    rssi: document.getElementById('rssi'), 
+                    firmware: document.getElementById('firmware'), 
+                    messageCount: document.getElementById('messageCount'), 
+                    lightControl: document.getElementById('lightControl'), 
+                    fanControl: document.getElementById('fanControl'), 
+                    autoLightControl: document.getElementById('autoLightControl'), 
+                    alertContainer: document.getElementById('alert-container'), 
+                    rangeSelector: document.getElementById('range-selector'), 
+                    datetimePicker: document.getElementById('datetime-picker'),
+                    daySelector: document.getElementById('day-selector'),
+                    monthSelector: document.getElementById('month-selector'),
+                    current_temp: document.getElementById('current_temp'), 
+                    current_hum: document.getElementById('current_hum'), 
+                    current_gas: document.getElementById('current_gas'), 
+                    current_lux: document.getElementById('current_lux')
+                };
+                let charts = {}, alertStreaks = { temp: 0, gas: 0, lux: 0 }, lastAlerts = { temp: 0, gas: 0, lux: 0 };
+                let currentRange = '24h';
+        
+                // ===================== CHART SETUP =====================
+                function createChart(canvasId, timeUnit) {
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    return new Chart(ctx, {
+                        type: 'line',
+                        data: { labels: [], datasets: [{ data: [], fill: true, tension: 0.4, pointRadius: 0 }] },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            scales: { 
+                                x: { type: 'time', time: { unit: timeUnit }, grid: { display: false } }, 
+                                y: { beginAtZero: false, grid: { color: 'rgba(0,0,0,0.05)' } } 
+                            },
+                            plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } }
+                        }
+                    });
+                }
+        
+                        function initializeCharts(timeUnit = 'hour') {
+                            Object.values(charts).forEach(chart => chart.destroy()); // Clear previous charts
+                            charts.temperature = createChart('temperatureChart', timeUnit);
+                            charts.temperature.data.datasets[0].label = 'Temperature';
+                            charts.temperature.data.datasets[0].borderColor = '#dc3545';
+                            charts.temperature.data.datasets[0].backgroundColor = '#dc354533';
+                            charts.temperature.options.scales.y.min = 0;
+                            charts.temperature.options.scales.y.max = 40;
+                
+                            charts.humidity = createChart('humidityChart', timeUnit);
+                            charts.humidity.data.datasets[0].label = 'Humidity';
+                            charts.humidity.data.datasets[0].borderColor = '#0dcaf0';
+                            charts.humidity.data.datasets[0].backgroundColor = '#0dcaf033';
+                            charts.humidity.options.scales.y.min = 0;
+                            charts.humidity.options.scales.y.max = 100;
+                
+                            charts.gas = createChart('gasChart', timeUnit);
+                            charts.gas.data.datasets[0].label = 'Gas';
+                            charts.gas.data.datasets[0].borderColor = '#ffc107';
+                            charts.gas.data.datasets[0].backgroundColor = '#ffc10733';
+                            charts.gas.options.scales.y.min = 0;
+                            charts.gas.options.scales.y.max = 2000;
+                
+                            charts.lux = createChart('luxChart', timeUnit);
+                            charts.lux.data.datasets[0].label = 'Light';
+                            charts.lux.data.datasets[0].borderColor = '#fd7e14';
+                            charts.lux.data.datasets[0].backgroundColor = '#fd7e1433';
+                            charts.lux.options.scales.y.min = 0;
+                            charts.lux.options.scales.y.max = 1500;
+                        }        
+                        async function fetchHistoricalData(range, time) {
+                            let url = `${API_URL}?range=${range}`;
+                            if (time) {
+                                let dateObj;
+                                if (range === '7d') { // day-selector provides YYYY-MM-DD
+                                    const [year, month, day] = time.split('-').map(Number);
+                                    dateObj = new Date(Date.UTC(year, month - 1, day));
+                                } else if (range === '30d') { // month-selector provides YYYY-MM
+                                    const [year, month] = time.split('-').map(Number);
+                                    dateObj = new Date(Date.UTC(year, month - 1, 1)); // First day of the month
+                                } else { // datetime-local provides YYYY-MM-DDTHH:mm
+                                    dateObj = new Date(time);
+                                }
+                                                                url += `&time=${dateObj.toISOString()}`;
+                                                            }
+                                                            try {
+                                                                const response = await fetch(url);                                if (!response.ok) { showAlert('api_error', `Failed to load history: ${response.statusText}`, 'danger'); return; }
+                                const data = await response.json();
+                                
+                                let timeUnit;
+                                if (range === '1h') timeUnit = 'minute';
+                                else if (range === '24h') timeUnit = 'hour';
+                                else timeUnit = 'day';
+                
+                                initializeCharts(timeUnit);
+                
+                                const labels = data.map(d => new Date(d.time_bucket));
+                                charts.temperature.data.labels = labels; charts.temperature.data.datasets[0].data = data.map(d => parseFloat(d.avg_temp));
+                                charts.humidity.data.labels = labels; charts.humidity.data.datasets[0].data = data.map(d => parseFloat(d.avg_hum));
+                                charts.gas.data.labels = labels; charts.gas.data.datasets[0].data = data.map(d => parseFloat(d.avg_gas));
+                                charts.lux.data.labels = labels; charts.lux.data.datasets[0].data = data.map(d => parseFloat(d.avg_lux));
+                                Object.values(charts).forEach(chart => chart.update('none'));
+                            } catch (error) { showAlert('api_error', 'API connection failed.', 'danger'); console.error('Error fetching historical data:', error); }
+                        }        
+                // ===================== MQTT & DATA HANDLERS =====================
+                const client = mqtt.connect(BROKER_URL, { reconnectPeriod: 3000, connectTimeout: 5000 });
+                client.on('connect', () => { updateBrokerStatus('Connected', 'success'); client.subscribe([SENSOR_TOPIC, DEVICE_TOPIC, ONLINE_TOPIC], { qos: 1 }); });
+                client.on('reconnect', () => updateBrokerStatus('Reconnecting...', 'warning'));
+                client.on('close', () => { updateBrokerStatus('Disconnected', 'danger'); updateDeviceStatus('Offline', 'danger'); });
+        
+                client.on('message', (topic, payload) => {
+                    try {
+                        const data = JSON.parse(payload.toString());
+                        elements.messageCount.textContent = parseInt(elements.messageCount.textContent) + 1;
+                        if (topic === SENSOR_TOPIC) { updateSensorData(data); checkAlerts(data); }
+                        else if (topic === DEVICE_TOPIC) updateDeviceData(data);
+                        else if (topic === ONLINE_TOPIC) updateOnlineStatus(data);
+                    } catch (e) { console.error('Error processing MQTT message:', e); }
+                });
+        
+        function updateSensorData(data) {
+            const now = new Date();
+            const addData = (chart, value) => {
+                if (value === undefined || chart === undefined) return;
+                chart.data.labels.push(now);
+                chart.data.datasets[0].data.push(parseFloat(value));
+                if (chart.data.labels.length > 200) {
+                    chart.data.labels.shift();
+                    chart.data.datasets[0].data.shift();
+                }
+            };
+            addData(charts.temperature, data.temp_c);
+            addData(charts.humidity, data.hum_pct);
+            addData(charts.gas, data.gas);
+            addData(charts.lux, data.lux);
+
+            Object.values(charts).forEach(chart => chart.update());
+
+            if (data.temp_c !== undefined) elements.current_temp.textContent = `${data.temp_c.toFixed(1)} °C`;
+            if (data.hum_pct !== undefined) elements.current_hum.textContent = `${data.hum_pct.toFixed(1)} %`;
+            if (data.gas !== undefined) elements.current_gas.textContent = data.gas;
+            if (data.lux !== undefined) elements.current_lux.textContent = `${data.lux} lux`;
+        }
+        
+                function updateDeviceData(data) {
+                    if (data.light !== undefined) elements.lightControl.checked = data.light === 'on';
+                    if (data.fan !== undefined) elements.fanControl.checked = data.fan === 'on';
+                    if (data.auto_light !== undefined) elements.autoLightControl.checked = data.auto_light === 'on';
+                    if (data.rssi !== undefined) elements.rssi.textContent = `${data.rssi} dBm`;
+                    if (data.fw !== undefined) elements.firmware.textContent = data.fw;
+                }
+        
+                function updateOnlineStatus(data) {
+                    const isOnline = data.online === true;
+                    updateDeviceStatus(isOnline ? 'Online' : 'Offline', isOnline ? 'success' : 'danger');
+                    if (!isOnline) showAlert('device_offline', 'Device has gone offline!', 'danger');
+                    else showAlert('device_online', 'Device is back online!', 'success', 5000);
+                }
+        
+                function updateBrokerStatus(text, type) { elements.brokerStatus.className = `badge rounded-pill text-bg-${type}`; elements.brokerStatus.innerHTML = `<i class="bi bi-reception-4"></i> MQTT: ${text}`; }
+                function updateDeviceStatus(text, type) { elements.deviceStatus.className = `badge rounded-pill text-bg-${type}`; elements.deviceStatus.innerHTML = `<i class="bi bi-cpu"></i> Device: ${text}`; }
+        
+                // ===================== ALERTS =====================
+                function checkAlerts(data) {
+                    const now = Date.now();
+                    const check = (key, value, threshold, isMax) => {
+                        if (value === undefined) return;
+                        if ((isMax && value >= threshold) || (!isMax && value <= threshold)) {
+                            alertStreaks[key]++;
+                            if (alertStreaks[key] >= STREAK_NEEDED && (now - lastAlerts[key]) >= ALERT_COOLDOWN_MS) {
+                                const msg = `${key.charAt(0).toUpperCase() + key.slice(1)} threshold crossed: ${value}`;
+                                showAlert(key, msg, 'danger');
+                                lastAlerts[key] = now;
+                                alertStreaks[key] = 0;
+                            }
+                        } else { alertStreaks[key] = 0; }
+                    };
+                    check('temp', data.temp_c, TEMP_HIGH_C, true);
+                    check('gas', data.gas, GAS_HIGH, true);
+                    check('lux', data.lux, LUX_LOW, false);
+                }
+        
+                function showAlert(id, message, type = 'info', duration = 10000) {
+                    if (document.getElementById(id) && type !== 'success') return;
+                    const iconMap = { danger: 'exclamation-triangle-fill', warning: 'exclamation-circle-fill', success: 'check-circle-fill', info: 'info-circle-fill' };
+                    const alertEl = document.createElement('div');
+                    alertEl.id = id;
+                    alertEl.className = `alert alert-${type} alert-dismissible fade show shadow-lg`;
+                    alertEl.innerHTML = `<i class="bi bi-${iconMap[type]} me-2"></i> <strong>${message}</strong> <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+                    elements.alertContainer.appendChild(alertEl);
+                    if (duration > 0) setTimeout(() => bootstrap.Alert.getOrCreateInstance(alertEl)?.close(), duration);
+                }
+        
+                // ===================== DEVICE CONTROLS =====================
+                function sendDeviceCommand(command) {
+                    if (!client.connected) { showAlert('mqtt_disconnected', 'Cannot send command. MQTT is disconnected.', 'warning'); return; }
+                    client.publish(DEVICE_CMD_TOPIC, JSON.stringify(command), { qos: 1 });
+                }
+        
+                // ===================== INITIALIZATION =====================
+                document.addEventListener('DOMContentLoaded', () => {
+                    // Set initial datetime picker value to now
+                    const now = new Date();
+                    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                    elements.datetimePicker.value = now.toISOString().slice(0,16);
+                    elements.daySelector.value = now.toISOString().slice(0,10);
+                    elements.monthSelector.value = now.toISOString().slice(0,7);
+        
+                    fetchHistoricalData(currentRange, elements.datetimePicker.value);
+        
+                    elements.lightControl.addEventListener('change', (e) => sendDeviceCommand({ 'light': e.target.checked ? 'on' : 'off' }));
+                    elements.fanControl.addEventListener('change', (e) => sendDeviceCommand({ 'fan': e.target.checked ? 'on' : 'off' }));
+                    elements.autoLightControl.addEventListener('change', (e) => sendDeviceCommand({ 'auto_light': e.target.checked ? 'on' : 'off' }));
+                    
+                    elements.rangeSelector.addEventListener('change', (e) => {
+                        const selectedRange = e.target.id.replace('range', ''); // 1h, 24h, 7d, 30d
+                        currentRange = selectedRange;
+                        
+                        elements.datetimePicker.style.display = 'none';
+                        elements.daySelector.style.display = 'none';
+                        elements.monthSelector.style.display = 'none';
+        
+                        if (['1h', '24h'].includes(currentRange)) {
+                            elements.datetimePicker.style.display = 'block';
+                            fetchHistoricalData(currentRange, elements.datetimePicker.value);
+                        } else if (currentRange === '7d') {
+                            elements.daySelector.style.display = 'block';
+                            fetchHistoricalData(currentRange, elements.daySelector.value);
+                        } else if (currentRange === '30d') {
+                            elements.monthSelector.style.display = 'block';
+                            fetchHistoricalData(currentRange, elements.monthSelector.value);
+                        }
+                    });
+        
+                    elements.datetimePicker.addEventListener('change', (e) => {
+                        fetchHistoricalData(currentRange, e.target.value);
+                    });
+        
+                    elements.daySelector.addEventListener('change', (e) => {
+                        fetchHistoricalData(currentRange, e.target.value);
+                    });
+        
+                    elements.monthSelector.addEventListener('change', (e) => {
+                        fetchHistoricalData(currentRange, e.target.value);
+                    });
+        
+                    // Force chart resize when tab is shown
+                    const chartTabs = document.querySelectorAll('#chart-tabs button[data-bs-toggle="tab"]');
+                    chartTabs.forEach(tabEl => {
+                        tabEl.addEventListener('shown.bs.tab', event => {
+                            const paneId = event.target.dataset.bsTarget;
+                            const canvas = document.querySelector(`${paneId} canvas`);
+                            const chart = Chart.getChart(canvas);
+                            if (chart) {
+                                chart.resize();
+                            }
+                        });
+                    });
+        
+                    // Initial check to show/hide datetime picker
+                    if (['1h', '24h'].includes(currentRange)) {
+                        elements.datetimePicker.style.display = 'block';
+                    } else {
+                        elements.datetimePicker.style.display = 'none';
+                    }
+                });
+            </script>
+        </body>
+        </html>
